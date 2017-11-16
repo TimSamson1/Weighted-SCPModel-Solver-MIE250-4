@@ -1,6 +1,9 @@
 package solver;
-import java.util.SortedSet;
-import java.util.TreeSet;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.TreeSet;                           
+import util.ElementSet;
+import model.SCPModel;
 
 /** This is the main method that all solvers inherit from.  It is important
  *  to note how this solver calls nextBestSet() polymorphically!  Subclasses
@@ -14,13 +17,15 @@ import java.util.TreeSet;
  */
 public abstract class GreedySolver {
 	
-	protected String _name;			  // name of algorithm type
+	protected String _name;		  // name of algorithm type
 	protected double _alpha;          // minimum required coverage level in range [0,1]
 	protected SCPModel _model;        // the SCP model we're currently operating on
 	protected double _objFn;          // objective function value (*total cost sum* of all sets used)
 	protected double _coverage;       // actual coverage fraction achieved
 	protected long _compTime;         // computation time (ms)
-	
+	protected SCPModel _solnSets;     // sets selected for current model 
+        protected SCPModel _unusedSets;   // sets left unselected
+        
 	// Basic setter (only one needed)
 	public void setMinCoverage(double alpha) { _alpha = alpha; }
 	public void setModel(SCPModel model) { _model = model; }
@@ -41,25 +46,50 @@ public abstract class GreedySolver {
 	public void solve() {
 		
 		// Reset the solver
-		reset();
-		
-		// TODO: Preliminary initializations
+		_coverage = 0;
+                _objFn = 0;
+                _compTime = 0;
+                
+		//Preliminary initializations
+                _unusedSets = new SCPModel(_model); // copy of working SCP model 
+                _solnSets = new SCPModel(); // empty model to store selected sets
 
 		// Begin the greedy selection loop
 		long start = System.currentTimeMillis();
 		System.out.println("Running '" + getName() + "'...");
-
-		// TODO: Fill in the main loop, pseudocode given below
-		//
+                
 		// while (set elements remaining not covered > max num that can be left uncovered
 		//        AND all sets have not been selected)
-		//
+		while((_coverage < _alpha) && (!(_unusedSets._model.isEmpty())) ){
+                    if (nextBestSet() != null){
+                        ElementSet best = nextBestSet();
+                        //change best ElementSet._treeset into a List
+                        List<Integer> list = new ArrayList<Integer> (best.getTS());
+                        _solnSets.addSetToCover(best.getId(), best.getCost(), list); //case TS into type List
+                        System.out.println("- Selected: " + best);
+                                
+                        _unusedSets._model.remove(best);
+  
+                        _coverage = ((double)(_solnSets.modelElementNum()))/(this._model.modelElementNum());
+
+                    }
+                    else{
+                        break; // no more possible best sets
+                    }
+                }
+
 		//      Call nextBestSet() to get the next best ElementSet to add (if there is one)
 		// 		Update solution and local members
 		
+                //sum the costs of sets in _solnSets
+                _objFn = 0;
+                for(ElementSet es : _solnSets._model){
+                    _objFn += es.getCost();
+                }
+                
 		// Record final set coverage, compTime and print warning if applicable
-		_coverage = -1d; // TODO: Correct this, should be coverage of solution found
-		_compTime = System.currentTimeMillis() - start;
+		 _coverage = ((double)(_solnSets.modelElementNum()))/(this._model.modelElementNum());
+                _compTime = System.currentTimeMillis() - start;
 		if (_coverage < _alpha)
 			System.out.format("\nWARNING: Impossible to reach %.2f%% coverage level.\n", 100*_alpha);
 		System.out.println("Done.");
@@ -88,7 +118,7 @@ public abstract class GreedySolver {
 		System.out.format("'" + getName() + "'   Coverage level: %.2f%% (%.2f%% minimum)\n", 100*_coverage, 100*_alpha);
 		System.out.format("'" + getName() + "'   Number of sets selected: %d\n", _solnSets.size());
 		System.out.format("'" + getName() + "'   Sets selected: ");
-		for (ElementSet s : _solnSets) {
+		for (ElementSet s : _solnSets._model) { //edited: accessed the _model in _solnSets
 			System.out.print(s.getId() + " ");
 		}
 		System.out.println("\n");
